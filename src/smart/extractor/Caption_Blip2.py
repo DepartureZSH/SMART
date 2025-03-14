@@ -84,7 +84,6 @@ def validate(file):
     indx = data.iloc[ind, 0]
     image_path = image_mapping[str(indx)]
     objects = json.loads(data.iloc[ind, 1])
-    # objects = json.loads(data.iloc[0, 1])
     print(objects)
 
 if __name__ == '__main__':
