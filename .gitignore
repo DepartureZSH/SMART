@@ -2,6 +2,8 @@
 /data/VRD/
 /data/Features/BLIP1/
 /data/*
+/output/CLEVER/*
+/output/SMART/*
 /pretrained_models/pretrained_base/
 /pretrained_models/pretrained_avg_model/
 !/data/Features/
