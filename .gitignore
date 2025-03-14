@@ -1,5 +1,6 @@
 /pretrained_models/blip2-opt-2.7b
 /data/VRD/
+/data/Features/BLIP1/
 /data/*
 /pretrained_models/pretrained_base/
 /pretrained_models/pretrained_avg_model/
