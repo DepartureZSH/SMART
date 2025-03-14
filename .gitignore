@@ -1,0 +1,8 @@
+/pretrained_models/blip2-opt-2.7b
+/output/CLEVER/*
+/output/SMART/*
+/data/VRD/
+/data/*
+!/data/Features/
+!/data/download.sh
+**__pycache__/
