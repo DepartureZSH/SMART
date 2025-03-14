@@ -36,3 +36,9 @@ wget https://thunlp.oss-cn-qingdao.aliyuncs.com/CLEVER_AAAI23_VG100-100_label.ts
 mkdir VRD && cd VRD
 wget https://thunlp.oss-cn-qingdao.aliyuncs.com/CLEVER_CKE_VRD-data_100shot.tsv -O VRD_100shot.tsv
 wget https://thunlp.oss-cn-qingdao.aliyuncs.com/CLEVER_CKE_VRD-data_100shot_feat-file_line-ids.json -O VRD_100shot_feat-lines.json
+
+wget https://cs.stanford.edu/people/rak248/VG_100K_2/images.zip -O images.zip
+wget https://cs.stanford.edu/people/rak248/VG_100K_2/images2.zip -O images2.zip
+
+tar -xvf images.zip
+tar -xvf images2.zip
