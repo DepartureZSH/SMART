@@ -26,14 +26,16 @@ class BagDatasetPairAsUnit(Dataset):
         self.label_tsv = TSVFile(f'{data_dir}/VG_100_100_label.tsv')
         self.line_tsv = TSVFile(f'{data_dir}/{split}_feat_idx_to_label_line.tsv')
         self.prediction = TSVFile(f'{data_dir}/obj_feat_{split}.tsv')
+        self.img_captions = TSVFile(f'{data_dir}/Features/BLIP2/Global/obj_feat_{split}.tsv')
+        self.obj_captions = TSVFile(f'{data_dir}/Features/BLIP2/Local/obj_feat_{split}.tsv')
 
+        self.idx_to_image_id = json.load(open(f'{data_dir}/Features/idx_image_id_mapping.json'))
         self.bag_pair_data = json.load(open(f'{data_dir}/{split}_pairs_data.json'))
         self.img_id_to_key = {k: v[0] for k, v in enumerate(self.label_tsv)}
 
         self.key_to_prediction_line = {v[0]: i for i, v in enumerate(self.prediction)}
 
         self.predicate_to_idx = json.load(open(f'{data_dir}/vg_dict.json'))['predicate_to_idx']
-
         self.shuffle = shuffle
 
         mapping = json.load(open(f'{data_dir}/vg_dict.json'))
@@ -88,14 +90,14 @@ class BagDatasetPairAsUnit(Dataset):
 
             # generate features
             input_ids, input_mask, segment_ids, tokens_a, _ = tokenize(self.tokenizer,
-                                                                                  text_a=text_a, text_b=text_b,
-                                                                                  img_feat=object_features,
-                                                                                  max_img_seq_len=self.img_seq_len,
-                                                                                  max_seq_a_len=70, max_seq_len=70,
-                                                                                  cls_token_segment_id=0,
-                                                                                  pad_token_segment_id=0,
-                                                                                  sequence_a_segment_id=0,
-                                                                                  sequence_b_segment_id=1)
+                                                                        text_a=text_a, text_b=text_b,
+                                                                        img_feat=object_features,
+                                                                        max_img_seq_len=self.img_seq_len,
+                                                                        max_seq_a_len=70, max_seq_len=70,
+                                                                        cls_token_segment_id=0,
+                                                                        pad_token_segment_id=0,
+                                                                        sequence_a_segment_id=0,
+                                                                        sequence_b_segment_id=1)
             object_name_positions = []
             current_object_positions = []
             for token_idx, tok in enumerate(tokens_a, 1):  # omit [CLS]
@@ -213,7 +215,13 @@ class BagDatasetPairAsUnit(Dataset):
 
     def decode_features(self, item_idx):
         img_108076_id_str, prediction_str = self.prediction.seek(item_idx)
-        # print(f"img_108076_id_str {img_108076_id_str}")
+        img_108076_id_str2, prediction_str2 = self.img_captions.seek(item_idx)
+        img_108076_id_str3, prediction_str3 = self.obj_captions.seek(item_idx)
+        assert img_108076_id_str == img_108076_id_str2 == img_108076_id_str3
+        print(f"prediction_str2 {prediction_str2}")
+        print(f"prediction_str3 {prediction_str3}")
+        print(self.idx_to_image_id[img_108076_id_str3])
+        exit(1)
         # print(f"prediction_str {prediction_str}")
         feat_info = json.loads(prediction_str)
 
@@ -235,8 +243,9 @@ class BagDatasetPairAsUnit(Dataset):
         assert len(label_classes) == len(prediction_classes)
 
         # object captions
-        captions_features = [np.frombuffer(base64.b64decode(o['caption']), np.float32) for o in prediction_objects]
-        label_captions  = torch.Tensor(np.stack(captions_features))
+        # captions_features = [np.frombuffer(base64.b64decode(o['caption']), np.float32) for o in prediction_objects]
+        # label_captions  = torch.Tensor(np.stack(captions_features))
+        label_captions = []
 
         # bboxes
         prediction_boxes = [o['rect'] for o in prediction_objects]
@@ -244,3 +253,22 @@ class BagDatasetPairAsUnit(Dataset):
         assert len(prediction_boxes) == len(label_boxes)
 
         return img_108076_id_str, label_classes, label_captions, object_features, label_boxes
+
+class args:
+    num_classes = 100
+    eval_model_dir = 'bert-base-uncased'
+    def __init__(self):
+        pass
+
+if __name__ == "__main__":
+    import pathlib
+    folder = pathlib.Path(__file__).parent.parent.parent.parent.resolve()
+    from smart.modeling.pytorch_transformers import BertTokenizer
+    ######################################################################################################
+    # Load pretrained model and tokenizer
+    tokenizer_class = BertTokenizer
+    checkpoint = f"{folder}/pretrained_models/pretrained_base/"
+    tokenizer = tokenizer_class.from_pretrained(checkpoint)
+    split = 'val'
+    Dataset = BagDatasetPairAsUnit(data_dir=f'{folder}/data', bag_data_file=f'{folder}/data/{split}_bag_data.json', split=split, args=args, tokenizer=tokenizer, txt_seq_len=70, img_seq_len=50, shuffle=False)
+    print(Dataset[3])

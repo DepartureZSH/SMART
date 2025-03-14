@@ -42,7 +42,7 @@ def eval_clever(args, model, data_loader, tokenizer, desc='Eval'):
         # eval
         forward_start_time = time.time()
         with torch.no_grad():
-            with torch.amp.autocast():
+            with torch.amp.autocast(device_type="cuda"):
                 logits = model(bag_input_ids=input_ids, bag_token_type_ids=segment_ids, bag_attention_mask=input_mask, bag_img_feats=img_feat,
                                bag_object_box_lists=bag_object_boxes_list,
                                bag_object_name_positions_lists=bag_object_name_positions_list,
@@ -112,7 +112,7 @@ def eval_smart(args, model, data_loader, tokenizer, desc='Eval'):
         # eval
         forward_start_time = time.time()
         with torch.no_grad():
-            with torch.amp.autocast():
+            with torch.amp.autocast(device_type="cuda"):
                 logits = model(bag_input_ids=input_ids, bag_token_type_ids=segment_ids, bag_attention_mask=input_mask, bag_img_feats=img_feat,
                                bag_caption_feats = caption_feat,
                                bag_object_box_lists=bag_object_boxes_list,
@@ -175,7 +175,7 @@ def train_clever(args, train_loader, val_loader, test_loader, model, scheduler, 
         val_rtn = eval_clever(args, model, val_loader, tokenizer, desc=f'Eval Epoch-{0}/{config.num_train_steps}')
 
         best_score = val_rtn['auc'] + args.mAUC_weight * val_rtn['macro_auc']
-        write_tensorboard(writer, epoch_score, val_rtn, iteration, "val")
+        write_tensorboard(writer, best_score, val_rtn, iteration, "val")
 
         logger.info(f'Step-0 auc: {val_rtn["auc"]:.4f}, m_auc: {val_rtn["macro_auc"]:.4f}, '
                     f'micro-f1:{val_rtn["max_micro_f1"]:.4f}, '
@@ -194,11 +194,10 @@ def train_clever(args, train_loader, val_loader, test_loader, model, scheduler, 
              bag_head_obj_idxs_list, bag_tail_obj_idxs_list, bag_labels, attention_label_list,
              bag_image_ids_list, preload_ids_list) = label_list
             batch = tuple([x.to(args.device) for x in t] for t in batch)
-            img_feat, caption_feat, input_ids, input_mask, segment_ids = batch
+            img_feat, input_ids, input_mask, segment_ids = batch
             # bert forward
-            with torch.amp.autocast():
+            with torch.amp.autocast(device_type="cuda"):
                 loss = model(bag_input_ids=input_ids, bag_token_type_ids=segment_ids, bag_attention_mask=input_mask, bag_img_feats=img_feat,
-                             bag_caption_feats=caption_feat,
                              bag_object_box_lists=bag_object_boxes_list,
                              bag_object_name_positions_lists=bag_object_name_positions_list,
                              bag_head_obj_idxs_list=bag_head_obj_idxs_list,
@@ -285,7 +284,7 @@ def train_smart(args, train_loader, val_loader, test_loader, model, scheduler, o
             batch = tuple([x.to(args.device) for x in t] for t in batch)
             img_feat, caption_feat, input_ids, input_mask, segment_ids = batch
             # bert forward
-            with torch.amp.autocast():
+            with torch.amp.autocast(device_type="cuda"):
                 loss = model(bag_input_ids=input_ids, bag_token_type_ids=segment_ids, bag_attention_mask=input_mask, bag_img_feats=img_feat,
                              bag_caption_feats=caption_feat,
                              bag_object_box_lists=bag_object_boxes_list,
