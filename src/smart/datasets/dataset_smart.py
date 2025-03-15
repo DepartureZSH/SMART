@@ -7,7 +7,7 @@ import torch
 import torch.distributed
 from torch.utils.data import Dataset
 from smart.utils.tsv_file import TSVFile
-from smart.datasets import real_bag_size
+from smart.datasets import real_bag_size, feature_folder
 from smart.datasets.dataset_utils import tokenize, load_cached_image_ids, cal_metrics
 
 class BagDatasetPairAsUnit(Dataset):
@@ -26,8 +26,7 @@ class BagDatasetPairAsUnit(Dataset):
         self.label_tsv = TSVFile(f'{data_dir}/VG_100_100_label.tsv')
         self.line_tsv = TSVFile(f'{data_dir}/{split}_feat_idx_to_label_line.tsv')
         self.prediction = TSVFile(f'{data_dir}/obj_feat_{split}.tsv')
-        self.img_captions = TSVFile(f'{data_dir}/Features/BLIP2/Global/obj_feat_{split}.tsv')
-        self.obj_captions = TSVFile(f'{data_dir}/Features/BLIP2/Local/obj_feat_{split}.tsv')
+        self.captions = TSVFile(f'{data_dir}/{feature_folder}/obj_feat_{split}.tsv')
 
         self.idx_to_image_id = json.load(open(f'{data_dir}/Features/idx_image_id_mapping.json'))
         self.bag_pair_data = json.load(open(f'{data_dir}/{split}_pairs_data.json'))
@@ -215,15 +214,20 @@ class BagDatasetPairAsUnit(Dataset):
 
     def decode_features(self, item_idx):
         img_108076_id_str, prediction_str = self.prediction.seek(item_idx)
-        img_108076_id_str2, prediction_str2 = self.img_captions.seek(item_idx)
-        img_108076_id_str3, prediction_str3 = self.obj_captions.seek(item_idx)
-        assert img_108076_id_str == img_108076_id_str2 == img_108076_id_str3
-        print(f"prediction_str2 {prediction_str2}")
-        print(f"prediction_str3 {prediction_str3}")
-        print(self.idx_to_image_id[img_108076_id_str3])
-        exit(1)
+        # img_108076_id_str2, prediction_str2 = self.captions.seek(item_idx)
+        # img_108076_id_str3, prediction_str3 = self.obj_captions.seek(item_idx)
+        _, caption_str = self.captions.seek(item_idx)
+        print(self.idx_to_image_id[img_108076_id_str], end=" ")
+        
+        assert img_108076_id_str == _
+        # print(f"prediction_str2 {prediction_str2}")
+        # print(f"prediction_str3 {prediction_str3}")
+        # print(self.idx_to_image_id[img_108076_id_str3])
+        # print(f"caption_str {json.loads(caption_str)["objects"][0]}")
+        # exit(1)
         # print(f"prediction_str {prediction_str}")
         feat_info = json.loads(prediction_str)
+        caption_info = json.loads(caption_str)
 
         label_tsv_row_idx = int(self.line_tsv[item_idx][0])
         _, annotation_str = self.label_tsv[label_tsv_row_idx]
@@ -241,11 +245,11 @@ class BagDatasetPairAsUnit(Dataset):
         prediction_classes = [o['class'] for o in prediction_objects]
         label_classes = [o['class'] for o in objects_annotation]
         assert len(label_classes) == len(prediction_classes)
-
+        print(label_classes)
         # object captions
-        # captions_features = [np.frombuffer(base64.b64decode(o['caption']), np.float32) for o in prediction_objects]
-        # label_captions  = torch.Tensor(np.stack(captions_features))
-        label_captions = []
+        object_captions = caption_info["objects"]
+        captions_features = [np.frombuffer(base64.b64decode(o['caption_token']), np.float32) for o in object_captions]
+        label_captions  = torch.Tensor(np.stack(captions_features))
 
         # bboxes
         prediction_boxes = [o['rect'] for o in prediction_objects]
@@ -269,6 +273,7 @@ if __name__ == "__main__":
     tokenizer_class = BertTokenizer
     checkpoint = f"{folder}/pretrained_models/pretrained_base/"
     tokenizer = tokenizer_class.from_pretrained(checkpoint)
-    split = 'val'
+    split = 'test'
     Dataset = BagDatasetPairAsUnit(data_dir=f'{folder}/data', bag_data_file=f'{folder}/data/{split}_bag_data.json', split=split, args=args, tokenizer=tokenizer, txt_seq_len=70, img_seq_len=50, shuffle=False)
-    print(Dataset[3])
+    if Dataset[252][0] == '2#9':
+        print(Dataset[252][-2])

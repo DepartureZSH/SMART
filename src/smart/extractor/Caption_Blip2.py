@@ -18,7 +18,7 @@ if torch.cuda.is_available():
 else:
     devices = [torch.device('cpu')]
 device = devices[0]
-splits = ["val"]
+splits = ["val", "test"]
 
 def read_tsv(file):
     return pd.read_csv(file, sep='\t', header=None)

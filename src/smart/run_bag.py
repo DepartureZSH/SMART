@@ -251,6 +251,7 @@ def train_clever(args, train_loader, val_loader, test_loader, model, scheduler, 
 
 # Training process
 def train_smart(args, train_loader, val_loader, test_loader, model, scheduler, optimizer, tokenizer, config, writer=None):
+    torch.autograd.set_detect_anomaly(True)
     rank = get_rank()
     scaler = torch.amp.GradScaler()
 
@@ -260,13 +261,11 @@ def train_smart(args, train_loader, val_loader, test_loader, model, scheduler, o
     log_loss = 0
 
     pre_eval = True
-    if args.head == 'max':
-        val_loader = test_loader
     if pre_eval:
         val_rtn = eval_smart(args, model, val_loader, tokenizer, desc=f'Eval Epoch-{0}/{config.num_train_steps}')
 
         best_score = val_rtn['auc'] + args.mAUC_weight * val_rtn['macro_auc']
-        write_tensorboard(writer, epoch_score, val_rtn, iteration, "val")
+        write_tensorboard(writer, best_score, val_rtn, iteration, "val")
 
         logger.info(f'Step-0 auc: {val_rtn["auc"]:.4f}, m_auc: {val_rtn["macro_auc"]:.4f}, '
                     f'micro-f1:{val_rtn["max_micro_f1"]:.4f}, '
@@ -295,9 +294,10 @@ def train_smart(args, train_loader, val_loader, test_loader, model, scheduler, o
                              bag_image_ids_list=bag_image_ids_list, bag_key_list=bag_key_list,
                              preload_ids_list=preload_ids_list)
 
-            scaler.scale(loss / args.gradient_accumulation_steps).backward()
+            loss = loss / args.gradient_accumulation_steps
+            scaler.scale(loss).backward()
             # scaler.scale(loss).backward()
-            log_loss += (loss / args.gradient_accumulation_steps).item()
+            log_loss += (loss).item()
 
             val_result = None
 

@@ -104,6 +104,13 @@ class WarmupReduceLROnPlateau(object):
                 * self.gamma ** self.stage_count 
                 for lr in cos_anneal_lr
             ]
+        else:
+            return [
+                base_lr
+                * warmup_factor
+                * self.gamma ** self.stage_count
+                for base_lr in self.base_lrs
+            ]
 
     def step(self, metrics, epoch=None):
         if epoch is None:

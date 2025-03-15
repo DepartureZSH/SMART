@@ -5,11 +5,12 @@ DATA_DIR=$(realpath -m "${SCRIPT_DIR}/../../data")
 ##################################################
 MODEL_DIR=$(realpath -m "${SCRIPT_DIR}/../../pretrained_models")
 OUTPUT_DIR=$(realpath -m "${SCRIPT_DIR}/../../output")
-SAMPLE_PER_CARD=2
-ACCUMULATE_STEP=32
+SAMPLE_PER_CARD=1
+ACCUMULATE_STEP=8
 WARMUP_STEP=600
+NUM_CLASS=101 # Exclude blank label: 100; Not exclude blan label: 101
 MODEL=CLEVER # [CLEVER, SMART]
-HEAD=Custom # [simi_att, att, origin_att, avg, one, Custom]
+HEAD=att # CLEVER: [att, origin_att, avg, one], SMART: [simi_att, Custom]
 SCHEDULER=cosine # [constant, linear, cosine]
 seed=42
 

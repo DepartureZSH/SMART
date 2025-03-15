@@ -2,18 +2,18 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 DATA_DIR=$(realpath -m "${SCRIPT_DIR}/../../data")
 MODEL_DIR=$(realpath -m "${SCRIPT_DIR}/../../pretrained_models")
 OUTPUT_DIR=$(realpath -m "${SCRIPT_DIR}/../../output")
-SAMPLE_PER_CARD=2
-ACCUMULATE_STEP=32
-WARMUP_STEP=600
+SAMPLE_PER_CARD=2 # 1,2,4,8
+ACCUMULATE_STEP=32 # 8,16,32,64
+WARMUP_STEP=1000
 NUM_CLASS=101 # Exclude blank label: 100; Not exclude blan label: 101
 MODEL=CLEVER # [CLEVER, SMART]
-HEAD=att # CLEVER: [att, origin_att, avg, one], SMART: [simi_att, Custom1]
-SCHEDULER=cosine # [constant, linear, cosine]
+HEAD=att # CLEVER: [att, origin_att, avg, one], SMART: [simi_att, Custom]
+SCHEDULER=linear # [constant, linear, cosine]
 seed=42
-lr=3e-4
+lr=7e-5
 mAUC_weight=3
 
-CUDA_VISIBLE_DEVICES=0,1 torchrun --nproc_per_node=2 --master_port 10225 run_bag.py \
+CUDA_VISIBLE_DEVICES=0,1 torchrun --nproc_per_node=2 --master_port 10226 run_bag.py \
   --model ${MODEL}\
   --num_classes ${NUM_CLASS} \
   --eval_model_dir ${MODEL_DIR}/pretrained_base/ \
