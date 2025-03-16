@@ -15,6 +15,9 @@ from smart.utils.comm import all_gather, gather_on_master, reduce_dict, get_worl
 from smart.utils.save_model import save_model
 from smart.utils.initizer import *
 from smart.utils.optimizer import *
+import warnings
+warnings.filterwarnings('ignore', category=UserWarning, message='TypedStorage is deprecated')
+warnings.filterwarnings("ignore", category=FutureWarning, message=".*weights_only=False.*")
 
 ## Calculate the eval results
 def eval_clever(args, model, data_loader, tokenizer, desc='Eval'):
@@ -279,7 +282,7 @@ def train_smart(args, train_loader, val_loader, test_loader, model, scheduler, o
             model.train()
             (bag_key_list, bag_object_boxes_list, bag_object_classes_list, bag_object_name_positions_list,
              bag_head_obj_idxs_list, bag_tail_obj_idxs_list, bag_labels, attention_label_list,
-             bag_image_ids_list, preload_ids_list) = label_list
+             bag_image_ids_list, bag_image_files) = label_list
             batch = tuple([x.to(args.device) for x in t] for t in batch)
             img_feat, caption_feat, input_ids, input_mask, segment_ids = batch
             # bert forward
@@ -292,7 +295,7 @@ def train_smart(args, train_loader, val_loader, test_loader, model, scheduler, o
                              bag_tail_obj_idxs_list=bag_tail_obj_idxs_list,
                              bag_labels=bag_labels, attention_label_list=attention_label_list,
                              bag_image_ids_list=bag_image_ids_list, bag_key_list=bag_key_list,
-                             preload_ids_list=preload_ids_list)
+                             preload_ids_list=bag_image_files)
 
             loss = loss / args.gradient_accumulation_steps
             scaler.scale(loss).backward()
@@ -317,7 +320,7 @@ def train_smart(args, train_loader, val_loader, test_loader, model, scheduler, o
 
                     epoch_score = result['auc'] + args.mAUC_weight * result['macro_auc']
                     val_result = epoch_score
-                    write_tensorboard(writer, epoch_score, val_rtn, iteration, "val")
+                    write_tensorboard(writer, epoch_score, result, iteration, "val")
 
                     logger.info(f'Step-{iteration} auc: {result["auc"]:.4f}, m_auc: {result["macro_auc"]:.4f}, '
                                 f'micro-f1:{result["max_micro_f1"]:.4f}, '
@@ -329,7 +332,7 @@ def train_smart(args, train_loader, val_loader, test_loader, model, scheduler, o
 
                         # Run Test Split
                         result = eval_smart(args, model, test_loader, tokenizer, desc=f'Test step-{iteration}')
-                        write_tensorboard(writer, epoch_score, val_rtn, iteration, "test")
+                        write_tensorboard(writer, epoch_score, result, iteration, "test")
                         pickle.dump(result['results'], open(f'{args.output_dir}/best_results.pkl', 'wb'))
 
             scheduler.step(val_result, epoch=iteration)
@@ -355,6 +358,7 @@ def Model(args, local_rank):
         config.loss_type = "cls"
 
         model = model_class.from_pretrained(checkpoint, config=config)
+        model.head = args.head
         model.to(args.device)
 
         print(f'Load from {checkpoint}')
@@ -394,7 +398,7 @@ def Model(args, local_rank):
         logger.info("Evaluate the following checkpoint: %s", checkpoint)
         config.loss_type = "cls"
 
-        model = model_class.from_pretrained(checkpoint, config=config)
+        model = model_class.from_pretrained(checkpoint, config=config, head=args.head)
         model.to(args.device)
 
         print(f'Load from {checkpoint}')

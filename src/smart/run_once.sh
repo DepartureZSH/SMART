@@ -4,13 +4,13 @@ MODEL_DIR=$(realpath -m "${SCRIPT_DIR}/../../pretrained_models")
 OUTPUT_DIR=$(realpath -m "${SCRIPT_DIR}/../../output")
 SAMPLE_PER_CARD=2 # 1,2,4,8
 ACCUMULATE_STEP=32 # 8,16,32,64
-WARMUP_STEP=1000
+WARMUP_STEP=600
 NUM_CLASS=101 # Exclude blank label: 100; Not exclude blan label: 101
-MODEL=CLEVER # [CLEVER, SMART]
-HEAD=att # CLEVER: [att, origin_att, avg, one], SMART: [simi_att, Custom]
-SCHEDULER=linear # [constant, linear, cosine]
+MODEL=SMART # [CLEVER, SMART]
+HEAD=Custom # CLEVER: [att, origin_att, avg, one], SMART: [Custom]
+SCHEDULER=cosine # [constant, linear, cosine]
 seed=42
-lr=7e-5
+lr=3e-4
 mAUC_weight=3
 
 CUDA_VISIBLE_DEVICES=0,1 torchrun --nproc_per_node=2 --master_port 10226 run_bag.py \

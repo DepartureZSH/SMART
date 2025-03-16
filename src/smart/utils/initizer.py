@@ -274,12 +274,12 @@ def collate_smart(batch):
      bag_object_boxes_list,
      bag_object_classes_list, bag_object_name_positions_list,
      bag_head_obj_idxs_list, bag_tail_obj_idxs_list, bag_label_list,
-     attention_label_list, bag_image_ids_list, preload_ids_list) = new_batch
+     attention_label_list, bag_image_ids_list, bag_image_files) = new_batch
 
     bag_labels = torch.stack(bag_label_list, 0)
     return ((bag_key_list, bag_object_boxes_list, bag_object_classes_list, bag_object_name_positions_list,
              bag_head_obj_idxs_list, bag_tail_obj_idxs_list, bag_labels, attention_label_list, bag_image_ids_list,
-             preload_ids_list),
+             bag_image_files),
             (bag_image_feats_list, bag_caption_feats_list, bag_input_ids_list, bag_input_mask_list, bag_segment_ids_list))
 
 def build_test_dataset(bag_data_file, split, tokenizer, args):

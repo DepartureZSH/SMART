@@ -77,7 +77,7 @@ def forward_bag_pair_as_unit(model, label, input_ids, caption_feats, token_type_
     return bag_logits, attention_loss
 
 class BagModel(BertPreTrainedModel):
-    def __init__(self, config):
+    def __init__(self, config, head='Custom'):
         super(BagModel, self).__init__(config)
         self.num_labels = config.num_labels
         self.config = config

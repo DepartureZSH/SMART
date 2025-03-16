@@ -387,10 +387,10 @@ class ClipSimilarity(nn.Module):
         obj_img_feat = pair_img_feat[:, 2054:]
         sub_caption_feat = caption_feats[:, 0, :]
         obj_caption_feat = caption_feats[:, 1, :]
-        sub_img_feat /= sub_img_feat.norm(dim=-1, keepdim=True)
-        obj_img_feat /= obj_img_feat.norm(dim=-1, keepdim=True)
-        sub_caption_feat /= sub_caption_feat.norm(dim=-1, keepdim=True)
-        obj_caption_feat /= obj_caption_feat.norm(dim=-1, keepdim=True)
+        sub_img_feat = sub_img_feat / (sub_img_feat.norm(dim=-1, keepdim=True) + 1e-8)
+        obj_img_feat = obj_img_feat / (obj_img_feat.norm(dim=-1, keepdim=True) + 1e-8)
+        sub_caption_feat = sub_caption_feat / (sub_caption_feat.norm(dim=-1, keepdim=True) + 1e-8)
+        obj_img_feat = obj_img_feat / (obj_img_feat.norm(dim=-1, keepdim=True) + 1e-8)
         # The sub_caption confidence in a bag
         similarity1 = (sub_caption_feat @ sub_img_feat.T).sum(dim=0)
         # The obj_caption confidence in a bag
