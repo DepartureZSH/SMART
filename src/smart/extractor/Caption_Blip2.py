@@ -67,6 +67,10 @@ def Blip2_Caption_locally(model, processor, prompt=None):
             objects = json.loads(data.iloc[ind, 1])
             image = Image.open(f"{data_folder}/{image_path}").convert('RGB') # PIL Image
             for j, obj in enumerate(objects["objects"]):
+                if obj["rect"][3] - obj["rect"][1] < 5 or obj["rect"][2] - obj["rect"][0] < 5:
+                    caption = "Nothing in the picture."
+                    objects_list.append({"caption": caption})
+                    continue
                 image_patch = image.crop(obj["rect"])
                 if prompt is None:
                     inputs = processor(images=image_patch, return_tensors="pt").to(device)
