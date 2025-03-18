@@ -104,6 +104,6 @@ if __name__ == '__main__':
     
     model.to(device)
     prompt = "Question: What is the relationship between the main objects in the image? Answer:"
-    # Blip2_Caption_globally(model, processor)
-    Blip2_Caption_locally(model, processor)
+    Blip2_Caption_globally(model, processor)
+    # Blip2_Caption_locally(model, processor)
     # validate(f"{data_folder}/Features/obj_feat_val.tsv")
