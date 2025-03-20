@@ -30,7 +30,7 @@ def BagLoss(rel_logits, rel_label, loss_weight):
         loss = loss / (loss_weight_mapping[rel_label[0].item()]) ** loss_w_t
     return loss
 
-def forward_bag_pair_as_unit(model, label, input_ids, caption_feats, token_type_ids, attention_mask, img_feats,
+def forward_bag_pair_as_unit(model, label, input_ids, caption_feats, caption_feats_v2, image_caption_feats_v2, token_type_ids, attention_mask, img_feats,
                              object_box_lists, object_name_positions_lists, training, attention_label,
                              get_feat=False):
     # get output feat for images in this bag
@@ -72,7 +72,7 @@ def forward_bag_pair_as_unit(model, label, input_ids, caption_feats, token_type_
     if get_feat:
         return pair_feat
 
-    bag_logits, attention_loss = model.Attention(caption_feats, pair_feat, label, pair_attention_label)
+    bag_logits, attention_loss = model.Attention(caption_feats_v2, image_caption_feats_v2, pair_feat, label, pair_attention_label)
     
     return bag_logits, attention_loss
 
@@ -109,11 +109,16 @@ class BagModel(BertPreTrainedModel):
         logits_list = []
         loss_list = []
 
+        bag_image_files, bag_caption_feats_v2, bag_image_cap_feats_v2 = preload_ids_list
+        # bag_caption_feats_v2 
+        # bag_image_cap_feats_v2 # torch.size([50, 1, 768])
         # process one bag at each iteration
         for bag_idx in range(len(bag_labels)):
             label = bag_labels[bag_idx]
             input_ids = bag_input_ids[bag_idx]
-            caption_feats = bag_caption_feats[bag_idx]
+            caption_feats = bag_caption_feats[bag_idx] # torch.size([bs, 50, 2054])
+            caption_feats_v2 = bag_caption_feats_v2[bag_idx] # torch.size([bs, 50, 768])
+            caption_img_feats_v2 = bag_image_cap_feats_v2[bag_idx] # torch.size([bs, 1, 768])
             token_type_ids = bag_token_type_ids[bag_idx]
             attention_mask = bag_attention_mask[bag_idx]
             img_feats = bag_img_feats[bag_idx]
@@ -123,7 +128,9 @@ class BagModel(BertPreTrainedModel):
 
             if self.training:
                 bag_logits, attention_loss = forward_bag_pair_as_unit(
-                    model=self, label=label, input_ids=input_ids, caption_feats=caption_feats,
+                    model=self, label=label, input_ids=input_ids, caption_feats=caption_feats, 
+                    caption_feats_v2=caption_feats_v2,
+                    image_caption_feats_v2=caption_img_feats_v2,
                     token_type_ids=token_type_ids,
                     attention_mask=attention_mask, img_feats=img_feats, object_box_lists=object_box_lists,
                     object_name_positions_lists=object_name_positions_lists, attention_label=attention_label,
@@ -136,6 +143,8 @@ class BagModel(BertPreTrainedModel):
             else:
                 bag_logits, attention_loss = forward_bag_pair_as_unit(
                     model=self, label=label, input_ids=input_ids, caption_feats=caption_feats,
+                    caption_feats_v2=caption_feats_v2,
+                    image_caption_feats_v2=caption_img_feats_v2,
                     token_type_ids=token_type_ids,
                     attention_mask=attention_mask, img_feats=img_feats, object_box_lists=object_box_lists,
                     object_name_positions_lists=object_name_positions_lists, attention_label=attention_label,

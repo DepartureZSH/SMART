@@ -106,7 +106,7 @@ def eval_smart(args, model, data_loader, tokenizer, desc='Eval'):
     for step, (label_list, batch) in tqdm(enumerate(data_loader), desc=desc, disable=(rank not in [0, -1])):
         (bag_key_list, bag_object_boxes_list, bag_object_classes_list, bag_object_name_positions_list,
          bag_head_obj_idxs_list, bag_tail_obj_idxs_list, bag_labels, attention_label_list,
-         bag_image_ids_list, preload_ids_list) = label_list
+         bag_image_ids_list, bag_image_files, bag_caption_feats_v2, bag_image_cap_feats_v2) = label_list
         batch = tuple([x.to(args.device) for x in t] for t in batch)
         img_feat, caption_feat, input_ids, input_mask, segment_ids = batch
         loader_end_time = time.time()
@@ -124,7 +124,7 @@ def eval_smart(args, model, data_loader, tokenizer, desc='Eval'):
                                bag_tail_obj_idxs_list=bag_tail_obj_idxs_list,
                                bag_labels=bag_labels, attention_label_list=attention_label_list,
                                bag_image_ids_list=bag_image_ids_list, bag_key_list=bag_key_list,
-                               preload_ids_list=preload_ids_list)
+                               preload_ids_list=[bag_image_files, bag_caption_feats_v2, bag_image_cap_feats_v2])
 
         forward_end_time = time.time()
         forward_time += forward_end_time - forward_start_time
@@ -282,7 +282,7 @@ def train_smart(args, train_loader, val_loader, test_loader, model, scheduler, o
             model.train()
             (bag_key_list, bag_object_boxes_list, bag_object_classes_list, bag_object_name_positions_list,
              bag_head_obj_idxs_list, bag_tail_obj_idxs_list, bag_labels, attention_label_list,
-             bag_image_ids_list, bag_image_files) = label_list
+             bag_image_ids_list, bag_image_files, bag_caption_feats_v2, bag_image_cap_feats_v2) = label_list
             batch = tuple([x.to(args.device) for x in t] for t in batch)
             img_feat, caption_feat, input_ids, input_mask, segment_ids = batch
             # bert forward
@@ -295,7 +295,7 @@ def train_smart(args, train_loader, val_loader, test_loader, model, scheduler, o
                              bag_tail_obj_idxs_list=bag_tail_obj_idxs_list,
                              bag_labels=bag_labels, attention_label_list=attention_label_list,
                              bag_image_ids_list=bag_image_ids_list, bag_key_list=bag_key_list,
-                             preload_ids_list=bag_image_files)
+                             preload_ids_list=[bag_image_files, bag_caption_feats_v2, bag_image_cap_feats_v2])
 
             loss = loss / args.gradient_accumulation_steps
             scaler.scale(loss).backward()

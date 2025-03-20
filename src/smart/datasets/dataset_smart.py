@@ -26,7 +26,15 @@ class BagDatasetPairAsUnit(Dataset):
         self.label_tsv = TSVFile(f'{data_dir}/VG_100_100_label.tsv')
         self.line_tsv = TSVFile(f'{data_dir}/{split}_feat_idx_to_label_line.tsv')
         self.prediction = TSVFile(f'{data_dir}/obj_feat_{split}.tsv')
-        self.captions = TSVFile(f'{data_dir}/{feature_folder}/obj_feat_{split}.tsv')
+        ########################################################################################
+        # Features
+        # Blip1 object(local) caption without prompt
+        self.captions_local_v1 = TSVFile(f'{data_dir}/{feature_folder}/BLIP1/obj_feat_{split}.tsv')
+        # Blip2 object(local) caption without prompt
+        self.captions_local_v2 = TSVFile(f'{data_dir}/{feature_folder}/BLIP2/Local/obj_feat_{split}.tsv')
+        # Blip2 image(Global) caption without prompt
+        self.captions_global_v2 = TSVFile(f'{data_dir}/{feature_folder}/BLIP2/Global/obj_feat_{split}.tsv')
+        ########################################################################################
 
         self.idx_to_image_id = json.load(open(f'{data_dir}/Features/idx_image_id_mapping.json'))
         self.bag_pair_data = json.load(open(f'{data_dir}/{split}_pairs_data.json'))
@@ -61,22 +69,35 @@ class BagDatasetPairAsUnit(Dataset):
 
     def get_image_item(self, item, pairs):
         # load data
-        img_108076_id_str, object_classes, object_captions, object_features, object_boxes, image_file = self.decode_features(item)
+        img_108076_id_str, object_classes, object_captions, object_features, object_boxes, image_file, label_captions_tokens = self.decode_features(item)
         assert len(object_features) == len(object_boxes)
+        
 
         object_classes = object_classes[: self.img_seq_len]
-        object_captions = object_captions[: self.img_seq_len]
+        if len(object_captions) == 2:
+            image_caption_v2 = object_captions[1]
+            object_captions_v2 = object_captions[0][: self.img_seq_len]
+            object_captions = label_captions_tokens
+            object_cap_feat_v2_tokens = [self.caption_tokenizer(caption['caption']) for caption in object_captions_v2]
+            image_cap_feat_v2_tokens = self.caption_tokenizer(image_caption_v2[0]["G_caption"])
+            image_cap_feats_v2 = image_cap_feat_v2_tokens.view(1, -1)
+            # print(len(object_cap_feat_v2_tokens), ",", object_cap_feat_v2_tokens[0].shape)
+            # print(image_cap_feat_v2_tokens.shape)
+        else:
+            object_captions = object_captions[: self.img_seq_len]
         object_features = object_features[: self.img_seq_len]
         object_boxes = object_boxes[: self.img_seq_len]
         pairs = [p for p in pairs if p[0] < self.img_seq_len and p[1] < self.img_seq_len]
 
         pair_image_feats = []
         pair_cap_feats = []
+        pair_cap_feats_v2 = []
         pair_input_ids = []
         pair_input_mask = []
         pair_segment_ids = []
         pair_object_boxes = []
         pair_object_classes = []
+        pair_image_cap_feats_v2 = []
         pair_object_name_positions = []
         for pair in pairs:
             obj_idx_permutation = [pair[0], pair[1],
@@ -118,18 +139,23 @@ class BagDatasetPairAsUnit(Dataset):
             cap_feat = torch.cat([torch.stack([object_captions[idx] for idx in obj_idx_permutation]),
                                   torch.zeros([self.img_seq_len - object_num, 2054])], 0)
 
+            # image_cap_feat_v2 = 
+            object_cap_feats_v2 = torch.cat([torch.stack([object_cap_feat_v2_tokens[idx] for idx in obj_idx_permutation]), torch.zeros([self.img_seq_len - object_num, 768])], 0)
+            
             assert len(object_name_positions) == len(object_classes)
             pair_image_feats.append(img_feat)
             pair_cap_feats.append(cap_feat)
+            pair_cap_feats_v2.append(object_cap_feats_v2)
             pair_input_ids.append(input_ids)
             pair_input_mask.append(input_mask)
             pair_segment_ids.append(segment_ids)
             pair_object_boxes.append([object_boxes[idx] for idx in obj_idx_permutation])
             pair_object_classes.append(obj_class_permutation)
+            pair_image_cap_feats_v2.append(image_cap_feats_v2)
             pair_object_name_positions.append(object_name_positions)
 
         return (img_108076_id_str, pair_image_feats, pair_cap_feats, pair_input_ids, pair_input_mask, pair_segment_ids,
-                pair_object_boxes, pair_object_classes, pair_object_name_positions, image_file)
+                pair_object_boxes, pair_object_classes, pair_object_name_positions, image_file, pair_cap_feats_v2, pair_image_cap_feats_v2)
 
     def __getitem__(self, item):
         bag_key = self.idx_to_bag_key[item]
@@ -152,6 +178,7 @@ class BagDatasetPairAsUnit(Dataset):
 
         bag_image_feats = []
         bag_caption_feats = []
+        bag_caption_feats_v2 = []
         bag_input_ids = []
         bag_input_mask = []
         bag_segment_ids = []
@@ -159,13 +186,14 @@ class BagDatasetPairAsUnit(Dataset):
         bag_object_classes = []
         bag_object_name_positions = []
         bag_image_files = []
+        bag_image_cap_feats_v2 = []
         for img_id, pairs in bag_image_id_to_pairs.items():
             idx = self.key_to_prediction_line[self.img_id_to_key[img_id]]
             (img_108076_id_str, pair_image_feats, pair_cap_feats, pair_input_ids, pair_input_mask, pair_segment_ids,
-             pair_object_boxes, pair_object_classes, pair_object_name_positions, image_file) = self.get_image_item(idx, pairs)
-
+             pair_object_boxes, pair_object_classes, pair_object_name_positions, image_file, pair_cap_feats_v2, image_cap_feats_v2) = self.get_image_item(idx, pairs)
             bag_image_feats += pair_image_feats
             bag_caption_feats += pair_cap_feats
+            bag_caption_feats_v2 += pair_cap_feats_v2
             bag_input_ids += pair_input_ids
             bag_input_mask += pair_input_mask
             bag_segment_ids += pair_segment_ids
@@ -173,15 +201,18 @@ class BagDatasetPairAsUnit(Dataset):
             bag_object_classes += pair_object_classes
             bag_object_name_positions += pair_object_name_positions
             bag_image_files.append(image_file)
+            bag_image_cap_feats_v2 += image_cap_feats_v2
 
         bag_image_feats = torch.stack(bag_image_feats, 0)
         bag_caption_feats = torch.stack(bag_caption_feats, 0)
+        bag_caption_feats_v2 = torch.stack(bag_caption_feats_v2, 0)
+        bag_image_cap_feats_v2 = torch.stack(bag_image_cap_feats_v2, 0)
         bag_input_ids = torch.stack(bag_input_ids, 0)
         bag_input_mask = torch.stack(bag_input_mask, 0)
         bag_segment_ids = torch.stack(bag_segment_ids, 0)
 
         return (bag_key, bag_image_feats, bag_caption_feats, bag_input_ids, bag_input_mask, bag_segment_ids, bag_object_boxes,
-                bag_object_classes, bag_object_name_positions, [], [], bag_label, attention_label, bag_image_ids, bag_image_files)
+                bag_object_classes, bag_object_name_positions, [], [], bag_label, attention_label, bag_image_ids, bag_image_files, bag_caption_feats_v2, bag_image_cap_feats_v2)
 
     def eval(self, pred_result):
         seen = set()
@@ -218,7 +249,9 @@ class BagDatasetPairAsUnit(Dataset):
         img_108076_id_str, prediction_str = self.prediction.seek(item_idx)
         # img_108076_id_str2, prediction_str2 = self.captions.seek(item_idx)
         # img_108076_id_str3, prediction_str3 = self.obj_captions.seek(item_idx)
-        _, caption_str = self.captions.seek(item_idx)
+        _, caption_str = self.captions_local_v1.seek(item_idx)
+        _, caption_str1 = self.captions_local_v2.seek(item_idx)
+        _, caption_str2 = self.captions_global_v2.seek(item_idx)
         image_file = self.idx_to_image_id[img_108076_id_str]
         
         assert img_108076_id_str == _
@@ -230,6 +263,8 @@ class BagDatasetPairAsUnit(Dataset):
         # print(f"prediction_str {prediction_str}")
         feat_info = json.loads(prediction_str)
         caption_info = json.loads(caption_str)
+        caption_info1 = json.loads(caption_str1)
+        caption_info2 = json.loads(caption_str2)
 
         label_tsv_row_idx = int(self.line_tsv[item_idx][0])
         _, annotation_str = self.label_tsv[label_tsv_row_idx]
@@ -249,33 +284,67 @@ class BagDatasetPairAsUnit(Dataset):
         assert len(label_classes) == len(prediction_classes)
         
         # object captions
-        object_captions = caption_info["objects"]
+        object_captions  = caption_info["objects"]
+        object_captions1 = caption_info1["objects"]
+        object_captions2 = caption_info2["objects"]
+        label_captions = [object_captions1, object_captions2]
         captions_features = [np.frombuffer(base64.b64decode(o['caption_token']), np.float32) for o in object_captions]
-        label_captions  = torch.Tensor(np.stack(captions_features))
+        label_captions_tokens  = torch.Tensor(np.stack(captions_features))
+
 
         # bboxes
         prediction_boxes = [o['rect'] for o in prediction_objects]
         label_boxes = [o['rect'] for o in objects_annotation]
         assert len(prediction_boxes) == len(label_boxes)
 
-        return img_108076_id_str, label_classes, label_captions, object_features, label_boxes, image_file
+        return img_108076_id_str, label_classes, label_captions, object_features, label_boxes, image_file, label_captions_tokens
 
-# class args:
-#     num_classes = 100
-#     eval_model_dir = 'bert-base-uncased'
-#     def __init__(self):
-#         pass
+    def caption_tokenizer(self, text):
+        tokens = self.tokenizer.tokenize(text)
+        caption_ids = self.tokenizer.convert_tokens_to_ids(tokens)
+        caption_ids = torch.nn.functional.pad(torch.tensor(caption_ids), (0, 768 - len(caption_ids)), value = 0)
+        return caption_ids
 
-# if __name__ == "__main__":
-#     import pathlib
-#     folder = pathlib.Path(__file__).parent.parent.parent.parent.resolve()
-#     from smart.modeling.pytorch_transformers import BertTokenizer
-#     ######################################################################################################
-#     # Load pretrained model and tokenizer
-#     tokenizer_class = BertTokenizer
-#     checkpoint = f"{folder}/pretrained_models/pretrained_base/"
-#     tokenizer = tokenizer_class.from_pretrained(checkpoint)
-#     split = 'test'
-#     Dataset = BagDatasetPairAsUnit(data_dir=f'{folder}/data', bag_data_file=f'{folder}/data/{split}_bag_data.json', split=split, args=args, tokenizer=tokenizer, txt_seq_len=70, img_seq_len=50, shuffle=False)
-#     if Dataset[252][0] == '2#9':
-#         print(Dataset[252])
+class args:
+    num_classes = 100
+    eval_model_dir = 'bert-base-uncased'
+    model = "SMART"
+    import pathlib
+    folder = pathlib.Path(__file__).parent.parent.parent.parent.resolve()
+    train_dir = f'{folder}/data/'
+    per_gpu_eval_batch_size = 1
+    num_workers = 1
+    device = "cuda"
+    def __init__(self):
+        pass
+
+if __name__ == "__main__":
+    import pathlib
+    folder = pathlib.Path(__file__).parent.parent.parent.parent.resolve()
+    from smart.modeling.pytorch_transformers import BertTokenizer
+    ######################################################################################################
+    # Load pretrained model and tokenizer
+    tokenizer_class = BertTokenizer
+    checkpoint = f"{folder}/pretrained_models/pretrained_base/"
+    tokenizer = tokenizer_class.from_pretrained(checkpoint)
+    from smart.utils.initizer import make_data_loader
+    split = 'test'
+    dataloader = make_data_loader(
+        args, None, f'{folder}/data/{split}_bag_data.json', 'test', tokenizer,
+        is_distributed=False,
+        is_train=False)
+    # Dataset = BagDatasetPairAsUnit(data_dir=f'{folder}/data', bag_data_file=f'{folder}/data/{split}_bag_data.json', split=split, args=args, tokenizer=tokenizer, txt_seq_len=70, img_seq_len=50, shuffle=False)
+    # if Dataset[252][0] == '2#9':
+    #     print(Dataset[252])
+    for step, (label_list, batch) in enumerate(dataloader):
+        (bag_key_list, bag_object_boxes_list, bag_object_classes_list, bag_object_name_positions_list,
+             bag_head_obj_idxs_list, bag_tail_obj_idxs_list, bag_labels, attention_label_list,
+             bag_image_ids_list, bag_image_files, bag_caption_feats_v2, bag_image_cap_feats_v2) = label_list
+        batch = tuple([x.to(args.device) for x in t] for t in batch)
+        img_feat, caption_feat, input_ids, input_mask, segment_ids = batch
+        print(bag_caption_feats_v2[0].shape)
+        print(bag_image_cap_feats_v2[0].shape)
+        print(caption_feat[0].shape)
+        print(torch.cat([bag_image_cap_feats_v2[0], bag_caption_feats_v2[0]], dim=1).shape)
+        break
+    
