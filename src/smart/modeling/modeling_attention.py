@@ -930,3 +930,4 @@ class MyAttentionClassifier3(nn.Module):
         if not self.training:
             bag_logits = nn.functional.softmax(bag_logits, dim=-1)
         return bag_logits, 0
+
