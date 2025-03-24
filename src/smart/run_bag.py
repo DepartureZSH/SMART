@@ -318,7 +318,7 @@ def train_smart(args, train_loader, val_loader, test_loader, model, scheduler, o
                     val_result = epoch_score
                     write_tensorboard(writer, epoch_score, result, iteration, "val")
 
-                    logger.info(f'Step-{iteration} auc: {result["auc"]:.4f}, m_auc: {result["macro_auc"]:.4f}, '
+                    logger.info(f'Step-{iteration} <Val> auc: {result["auc"]:.4f}, m_auc: {result["macro_auc"]:.4f}, '
                                 f'micro-f1:{result["max_micro_f1"]:.4f}, '
                                 f'macro-f1:{result["max_macro_f1"]:.4f}, p@2%:{result["p@2%"]:.4f}, '
                                 f'mp@2%:{result["mp@2%"]:.4f}')
@@ -330,6 +330,17 @@ def train_smart(args, train_loader, val_loader, test_loader, model, scheduler, o
                         result = eval_smart(args, model, test_loader, tokenizer, desc=f'Test step-{iteration}')
                         write_tensorboard(writer, epoch_score, result, iteration, "test")
                         pickle.dump(result['results'], open(f'{args.output_dir}/best_results.pkl', 'wb'))
+                        logger.info(f'Step-{iteration} <Test> auc: {result["auc"]:.4f}, m_auc: {result["macro_auc"]:.4f}, '
+                                f'micro-f1:{result["max_micro_f1"]:.4f}, '
+                                f'macro-f1:{result["max_macro_f1"]:.4f}, p@2%:{result["p@2%"]:.4f}, '
+                                f'mp@2%:{result["mp@2%"]:.4f}')
+                    else:
+                        result = eval_smart(args, model, test_loader, tokenizer, desc=f'Test step-{iteration}')
+                        write_tensorboard(writer, epoch_score, result, iteration, "test")
+                        logger.info(f'Step-{iteration} <Test> auc: {result["auc"]:.4f}, m_auc: {result["macro_auc"]:.4f}, '
+                                f'micro-f1:{result["max_micro_f1"]:.4f}, '
+                                f'macro-f1:{result["max_macro_f1"]:.4f}, p@2%:{result["p@2%"]:.4f}, '
+                                f'mp@2%:{result["mp@2%"]:.4f}')
 
             scheduler.step(val_result, epoch=iteration)
             if scheduler.stage_count >= 3:
