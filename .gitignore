@@ -6,6 +6,8 @@
 !/data/Features/
 !/data/download.sh
 /output/CLEVER/*
+/output/Analysis/*/*.pkl
+/output/Analysis/*/*.txt
 /output/SMART/*
 /pretrained_models/pretrained_base/
 /pretrained_models/pretrained_avg_model/
