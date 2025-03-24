@@ -773,9 +773,10 @@ class MyAttentionClassifier2(nn.Module):
 # BLIP2-MLA-MoE
 
 class SimilarityV3(nn.Module):
-    def __init__(self):
+    def __init__(self, pooling_dim):
         super(SimilarityV3, self).__init__()
-        # self.projection = nn.Linear(self.pooling_dim, 2054 * 2)
+        self.pooling_dim = pooling_dim
+        self.projection = nn.Linear(self.pooling_dim, self.pooling_dim)
 
     def forward(self, pair_img_feat, caption_feats):
         """
@@ -783,6 +784,8 @@ class SimilarityV3(nn.Module):
         :param features: list of (pooling_dim, ) tensor
         :return: (num_rel_cls, ) multi-class classification logits
         """
+        caption_feats = caption_feats.view(-1, self.pooling_dim)
+        caption_feats = self.projection(caption_feats)
         sub_img_feat = pair_img_feat[:, :768]
         obj_img_feat = pair_img_feat[:, 768:]
         # sub_caption_feat = caption_feats[:, 0, :]
@@ -798,29 +801,32 @@ class SimilarityV3(nn.Module):
 
         return similarity
 
-
-class MyAttentionClassifier3(nn.Module):
-    def __init__(self, embed_dim, num_heads, num_cls):
-        super(MyAttentionClassifier3, self).__init__()
-        self.experts = nn.ModuleList([Expert1(embed_dim, num_heads, num_cls), Expert2(embed_dim, num_heads, num_cls)])
-        self.Similarity = SimilarityV3(768)
-        embed_dim = embed_dim[0][0] * 2 + embed_dim[0][1]
-        self.gatting = nn.Sequential(
-            nn.Linear(embed_dim, 1024),
+class MyAttentionClassifier4(nn.Module):
+    def __init__(self, embed_dim, num_heads, num_cls, sfmx_t):
+        super(MyAttentionClassifier4, self).__init__()
+        # self.experts = nn.ModuleList([Expert1(embed_dim, num_heads, num_cls), Expert2(embed_dim, num_heads, num_cls)])
+        self.Similarity = SimilarityV3(embed_dim[0][0])
+        self.MLA = MultiHeadLatentAttention(embed_dim=embed_dim[0][0] + embed_dim[0][1], num_heads=16)
+        self.classifier1 = nn.Sequential(
+            nn.Linear(embed_dim[0][1], embed_dim[0][1] * 2),
             nn.ReLU(),
-            nn.Linear(1024, 256),
-            nn.ReLU(),
-            nn.Linear(256, 64),
-            nn.ReLU(),
-            nn.Linear(64, 2),
-            nn.Softmax(dim=1)
+            nn.Linear(embed_dim[0][1] * 2, num_cls)
         )
+        self.LayerNorm = nn.LayerNorm(embed_dim[0][0])
+        self.BagAttention = BagAttention_Attention(embed_dim[0][1], self.classifier1, 1)
+        self.SelfAttention = SelfAttention(embed_dim[0][0])
+        self.classifier = nn.Sequential(
+            nn.Linear(embed_dim[0][0] + embed_dim[0][1], embed_dim[0][1]),
+            nn.ReLU(),
+            nn.Linear(embed_dim[0][1], num_cls)
+        )
+        self.Fusion = GatedFusionNetwork(num_cls)
+        self.temperature = nn.Parameter(torch.ones(1, device=next(self.parameters()).device))
 
     def forward(self, caption_feats_v2, image_caption_feats_v2, pair_feats, label, pair_attention_label):
         # caption_feats_v2 # torch.size([bs, 50, 768])
         # image_caption_feats_v2 # torch.size([bs, 1, 768])
         # pair_feats # torch.size([bs, 768*4])
-
         sub_img_feat = pair_feats[:, :768]
         sub_tag_feat = pair_feats[:, 768: 768 * 2]
         obj_img_feat = pair_feats[:, 768 * 2: 768 * 3]
@@ -831,14 +837,94 @@ class MyAttentionClassifier3(nn.Module):
 
         similarity = self.Similarity(pair_img_feat, image_caption_feats_v2)
         bag_logits1, attention_loss = self.BagAttention(pair_feats, label, similarity, pair_attention_label)
-        attended_values = self.SelfAttention(caption_feats[:, 0:3, :])
+        x = self.LayerNorm(caption_feats[:, 0:3, :])
+        x = self.SelfAttention(x)
+        x = x.mean(dim=1)  # torch.Size([35, 2054])
+        x = x * similarity
+        x = torch.cat([pair_feats, x], dim=-1)
+        x = x.view(x.shape[0], 1, x.shape[1])
+        x, _ = self.MLA(x)
+        x = x.mean(dim=1)
+        x = self.classifier(x)
+        bag_logits2 = torch.sum(x, dim=0)
+        bag_logits1 = bag_logits1 / self.temperature
+        bag_logits2 = bag_logits2 / self.temperature
+        bag_logits = self.Fusion(bag_logits1, bag_logits2)
+        if not self.training:
+            bag_logits = nn.functional.softmax(bag_logits, dim=-1)
+        return bag_logits1, 0
+    
+#######################################################
+# SiMilarity Attention RecurrenT Block
+class SMART(nn.Module):
+    def __init__(self, embed_dim, num_heads, num_cls):
+        super(SMART, self).__init__()
+        self.SelfAttention = SelfAttention(embed_dim[0][0])
+        self.projection = nn.Linear(embed_dim[0][0], embed_dim[0][1] // 2)
+        self.MLA = MultiHeadLatentAttention(embed_dim=embed_dim[0][1] + embed_dim[0][1] // 2, num_heads=16)
+        self.classifier = nn.Sequential(
+            nn.Linear(embed_dim[0][1] + embed_dim[0][1] // 2, embed_dim[0][1]),
+            nn.ReLU(),
+            nn.Linear(embed_dim[0][1], num_cls)
+        )
 
+    def forward(self, similarity, caption_feats, pair_feats, label, pair_attention_label):
+        # caption_feats size (batchsize, 2054)
+        # pair_feats size (batchsize, 3072)
+            # img_feat size (batchsize, 1536)
+            # tag_feat size (batchsize, 1536)
+        attended_values = self.SelfAttention(caption_feats[:, 0:2, :])
+        x = attended_values.mean(dim=1)  # torch.Size([35, 2054])
+        x = x * similarity  # torch.Size([35, 2054])
+        x = self.projection(x)
+        x = torch.cat([pair_feats, x], dim=-1)
+        x = x.view(x.shape[0], 1, x.shape[1])
+        x, _ = self.MLA(x)
+        x = x.mean(dim=1)
+        x = self.classifier(x)
+        bag_logits = torch.sum(x, dim=0)
+        return bag_logits
+
+class SMART_Expert(nn.Module):
+    def __init__(self, embed_dim, num_heads, num_cls):
+        super(SMART_Expert, self).__init__()
+        self.Expert = SMART(embed_dim, num_heads, num_cls)
+
+    def forward(self, similarity, caption_feats, pair_feats, label, pair_attention_label):
+        bag_logits = self.Expert(similarity, caption_feats, pair_feats, label, pair_attention_label)
+        return bag_logits
+
+class MyAttentionClassifier3(nn.Module):
+    def __init__(self, embed_dim, num_heads, num_cls):
+        super(MyAttentionClassifier3, self).__init__()
+        self.Similarity = ClipSimilarity(embed_dim[0][1] // 2)
+        self.experts = nn.ModuleList([SMART_Expert(embed_dim, num_heads, num_cls) for i in range(3)])
+        embed_dim = embed_dim[0][0] * 2 + embed_dim[0][1]
+        self.gatting = nn.Sequential(
+            nn.Linear(embed_dim, 1024),
+            nn.ReLU(),
+            nn.Linear(1024, 256),
+            nn.ReLU(),
+            nn.Linear(256, 64),
+            nn.ReLU(),
+            nn.Linear(64, 6),
+            nn.Softmax(dim=1)
+        )
+
+    def forward(self, caption_feats, pair_feats, label, pair_attention_label):
+        sub_img_feat = pair_feats[:, :768]
+        sub_tag_feat = pair_feats[:, 768: 768 * 2]
+        obj_img_feat = pair_feats[:, 768 * 2: 768 * 3]
+        obj_tag_feat = pair_feats[:, 768 * 3:]
+        pair_img_feat = torch.cat([sub_img_feat, obj_img_feat], dim=-1)
+        similarity = self.Similarity(pair_img_feat, caption_feats)
         values, indices = similarity.squeeze().topk(1)
-        caption_feat = caption_feats[indices, 0:3, :].view(1,-1)
-        pair_feat = pair_feats[indices, :].view(1,-1)
+        caption_feat = caption_feats[indices, 0:2, :].view(1, -1)
+        pair_feat = pair_feats[indices, :].view(1, -1)
         feat = torch.cat([pair_feat, caption_feat], dim=-1)
         gates = self.gatting(feat)
-        expert_outs = [expert(similarity, caption_feats, pair_feats, label, pair_attention_label) for expert in self.experts]
+        expert_outs = [expert(similarity, caption_feats, pair_feats, label, pair_attention_label) for expert in
+                       self.experts]
         weighted_outs = [gate * expert_out for gate, expert_out in zip(gates.unbind(1), expert_outs)]
         bag_logits = torch.stack(weighted_outs, dim=-1).sum(dim=-1).squeeze()
         if not self.training:

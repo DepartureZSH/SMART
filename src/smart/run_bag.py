@@ -45,15 +45,14 @@ def eval_clever(args, model, data_loader, tokenizer, desc='Eval'):
         # eval
         forward_start_time = time.time()
         with torch.no_grad():
-            with torch.amp.autocast(device_type="cuda"):
-                logits = model(bag_input_ids=input_ids, bag_token_type_ids=segment_ids, bag_attention_mask=input_mask, bag_img_feats=img_feat,
-                               bag_object_box_lists=bag_object_boxes_list,
-                               bag_object_name_positions_lists=bag_object_name_positions_list,
-                               bag_head_obj_idxs_list=bag_head_obj_idxs_list,
-                               bag_tail_obj_idxs_list=bag_tail_obj_idxs_list,
-                               bag_labels=bag_labels, attention_label_list=attention_label_list,
-                               bag_image_ids_list=bag_image_ids_list, bag_key_list=bag_key_list,
-                               preload_ids_list=preload_ids_list)
+            logits = model(bag_input_ids=input_ids, bag_token_type_ids=segment_ids, bag_attention_mask=input_mask, bag_img_feats=img_feat,
+                            bag_object_box_lists=bag_object_boxes_list,
+                            bag_object_name_positions_lists=bag_object_name_positions_list,
+                            bag_head_obj_idxs_list=bag_head_obj_idxs_list,
+                            bag_tail_obj_idxs_list=bag_tail_obj_idxs_list,
+                            bag_labels=bag_labels, attention_label_list=attention_label_list,
+                            bag_image_ids_list=bag_image_ids_list, bag_key_list=bag_key_list,
+                            preload_ids_list=preload_ids_list)
 
         forward_end_time = time.time()
         forward_time += forward_end_time - forward_start_time
@@ -115,16 +114,15 @@ def eval_smart(args, model, data_loader, tokenizer, desc='Eval'):
         # eval
         forward_start_time = time.time()
         with torch.no_grad():
-            with torch.amp.autocast(device_type="cuda"):
-                logits = model(bag_input_ids=input_ids, bag_token_type_ids=segment_ids, bag_attention_mask=input_mask, bag_img_feats=img_feat,
-                               bag_caption_feats = caption_feat,
-                               bag_object_box_lists=bag_object_boxes_list,
-                               bag_object_name_positions_lists=bag_object_name_positions_list,
-                               bag_head_obj_idxs_list=bag_head_obj_idxs_list,
-                               bag_tail_obj_idxs_list=bag_tail_obj_idxs_list,
-                               bag_labels=bag_labels, attention_label_list=attention_label_list,
-                               bag_image_ids_list=bag_image_ids_list, bag_key_list=bag_key_list,
-                               preload_ids_list=[bag_image_files, bag_caption_feats_v2, bag_image_cap_feats_v2])
+            logits = model(bag_input_ids=input_ids, bag_token_type_ids=segment_ids, bag_attention_mask=input_mask, bag_img_feats=img_feat,
+                            bag_caption_feats = caption_feat,
+                            bag_object_box_lists=bag_object_boxes_list,
+                            bag_object_name_positions_lists=bag_object_name_positions_list,
+                            bag_head_obj_idxs_list=bag_head_obj_idxs_list,
+                            bag_tail_obj_idxs_list=bag_tail_obj_idxs_list,
+                            bag_labels=bag_labels, attention_label_list=attention_label_list,
+                            bag_image_ids_list=bag_image_ids_list, bag_key_list=bag_key_list,
+                            preload_ids_list=[bag_image_files, bag_caption_feats_v2, bag_image_cap_feats_v2])
 
         forward_end_time = time.time()
         forward_time += forward_end_time - forward_start_time
@@ -199,15 +197,14 @@ def train_clever(args, train_loader, val_loader, test_loader, model, scheduler, 
             batch = tuple([x.to(args.device) for x in t] for t in batch)
             img_feat, input_ids, input_mask, segment_ids = batch
             # bert forward
-            with torch.amp.autocast(device_type="cuda"):
-                loss = model(bag_input_ids=input_ids, bag_token_type_ids=segment_ids, bag_attention_mask=input_mask, bag_img_feats=img_feat,
-                             bag_object_box_lists=bag_object_boxes_list,
-                             bag_object_name_positions_lists=bag_object_name_positions_list,
-                             bag_head_obj_idxs_list=bag_head_obj_idxs_list,
-                             bag_tail_obj_idxs_list=bag_tail_obj_idxs_list,
-                             bag_labels=bag_labels, attention_label_list=attention_label_list,
-                             bag_image_ids_list=bag_image_ids_list, bag_key_list=bag_key_list,
-                             preload_ids_list=preload_ids_list)
+            loss = model(bag_input_ids=input_ids, bag_token_type_ids=segment_ids, bag_attention_mask=input_mask, bag_img_feats=img_feat,
+                            bag_object_box_lists=bag_object_boxes_list,
+                            bag_object_name_positions_lists=bag_object_name_positions_list,
+                            bag_head_obj_idxs_list=bag_head_obj_idxs_list,
+                            bag_tail_obj_idxs_list=bag_tail_obj_idxs_list,
+                            bag_labels=bag_labels, attention_label_list=attention_label_list,
+                            bag_image_ids_list=bag_image_ids_list, bag_key_list=bag_key_list,
+                            preload_ids_list=preload_ids_list)
 
             scaler.scale(loss / args.gradient_accumulation_steps).backward()
             # scaler.scale(loss).backward()
@@ -286,16 +283,15 @@ def train_smart(args, train_loader, val_loader, test_loader, model, scheduler, o
             batch = tuple([x.to(args.device) for x in t] for t in batch)
             img_feat, caption_feat, input_ids, input_mask, segment_ids = batch
             # bert forward
-            with torch.amp.autocast(device_type="cuda"):
-                loss = model(bag_input_ids=input_ids, bag_token_type_ids=segment_ids, bag_attention_mask=input_mask, bag_img_feats=img_feat,
-                             bag_caption_feats=caption_feat,
-                             bag_object_box_lists=bag_object_boxes_list,
-                             bag_object_name_positions_lists=bag_object_name_positions_list,
-                             bag_head_obj_idxs_list=bag_head_obj_idxs_list,
-                             bag_tail_obj_idxs_list=bag_tail_obj_idxs_list,
-                             bag_labels=bag_labels, attention_label_list=attention_label_list,
-                             bag_image_ids_list=bag_image_ids_list, bag_key_list=bag_key_list,
-                             preload_ids_list=[bag_image_files, bag_caption_feats_v2, bag_image_cap_feats_v2])
+            loss = model(bag_input_ids=input_ids, bag_token_type_ids=segment_ids, bag_attention_mask=input_mask, bag_img_feats=img_feat,
+                            bag_caption_feats=caption_feat,
+                            bag_object_box_lists=bag_object_boxes_list,
+                            bag_object_name_positions_lists=bag_object_name_positions_list,
+                            bag_head_obj_idxs_list=bag_head_obj_idxs_list,
+                            bag_tail_obj_idxs_list=bag_tail_obj_idxs_list,
+                            bag_labels=bag_labels, attention_label_list=attention_label_list,
+                            bag_image_ids_list=bag_image_ids_list, bag_key_list=bag_key_list,
+                            preload_ids_list=[bag_image_files, bag_caption_feats_v2, bag_image_cap_feats_v2])
 
             loss = loss / args.gradient_accumulation_steps
             scaler.scale(loss).backward()
