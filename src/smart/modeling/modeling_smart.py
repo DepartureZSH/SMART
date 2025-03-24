@@ -12,7 +12,7 @@ from torch import nn
 from smart.utils.comm import get_rank
 from smart.modeling.modeling_bert import BertImgModel
 from smart.modeling.pytorch_transformers.modeling_bert import BertPreTrainedModel
-from smart.modeling.modeling_attention import *
+from smart.modeling.modeling_attention import MyAttentionClassifier4 as MyAttentionClassifier
 import json
 from smart.modeling import NC, RED, GREEN, LIGHT_BLUE, LIGHT_PURPLE
 from smart.modeling import sfmx_t, attention_w, head, simi, select_size, loss_w_t, loss_weight_mapping
@@ -37,6 +37,8 @@ def forward_bag_pair_as_unit(model, label, input_ids, caption_feats, caption_fea
     shard_size = 50 if training else 50
     num_shard = math.ceil(input_ids.shape[0] / shard_size)
     outputs = []
+    caption_feats_v2 = caption_feats_v2.to(torch.float16)
+    image_caption_feats_v2 = image_caption_feats_v2.to(torch.float16)
 
     for i in range(num_shard):
         outputs.append(model.bert(input_ids[shard_size * i: shard_size * (i + 1)],
@@ -87,7 +89,7 @@ class BagModel(BertPreTrainedModel):
         # self.dropout = nn.Dropout(0.1)
 
         feat_size = config.hidden_size * 4
-        caption_feats_size = config.img_feature_dim
+        caption_feats_size = 768
         num_cls = 101
 
         self.classifier = nn.Sequential(
@@ -97,7 +99,7 @@ class BagModel(BertPreTrainedModel):
         )
 
         if head == 'Custom':
-            self.Attention = MyAttentionClassifier([[caption_feats_size, feat_size]], 13, num_cls, sfmx_t)
+            self.Attention = MyAttentionClassifier([[caption_feats_size, feat_size]], 16, num_cls, sfmx_t)
         else:
             raise NotImplementedError
 
